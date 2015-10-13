@@ -2,6 +2,7 @@ package io.swagger.models.properties;
 
 import io.swagger.models.Xml;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class UUIDProperty extends AbstractProperty implements Property {
@@ -13,6 +14,21 @@ public class UUIDProperty extends AbstractProperty implements Property {
     public UUIDProperty() {
         super.type = "string";
         super.format = "uuid";
+    }
+
+    public UUIDProperty _enum(String value) {
+        if (this._enum == null) {
+            this._enum = new ArrayList<String>();
+        }
+        if (!_enum.contains(value)) {
+            _enum.add(value);
+        }
+        return this;
+    }
+
+    public UUIDProperty _enum(List<String> value) {
+        this._enum = value;
+        return this;
     }
 
     public static boolean isType(String type, String format) {
@@ -80,10 +96,18 @@ public class UUIDProperty extends AbstractProperty implements Property {
         this._default = _default;
     }
 
+    public List<String> getEnum() {
+        return _enum;
+    }
+
+    public void setEnum(List<String> _enum) {
+        this._enum = _enum;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = 1;
+        int result = super.hashCode();
         result = prime * result + ((_default == null) ? 0 : _default.hashCode());
         result = prime * result + ((_enum == null) ? 0 : _enum.hashCode());
         result = prime * result + ((maxLength == null) ? 0 : maxLength.hashCode());
@@ -94,13 +118,10 @@ public class UUIDProperty extends AbstractProperty implements Property {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
+        if (!super.equals(obj)) {
             return false;
         }
-        if (getClass() != obj.getClass()) {
+        if (!(obj instanceof UUIDProperty)) {
             return false;
         }
         UUIDProperty other = (UUIDProperty) obj;

@@ -1,8 +1,12 @@
 package io.swagger.jackson;
 
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonIdentityReference;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerator;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.fasterxml.jackson.databind.BeanDescription;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,10 +27,18 @@ import io.swagger.models.RefModel;
 import io.swagger.models.Xml;
 import io.swagger.models.properties.AbstractNumericProperty;
 import io.swagger.models.properties.ArrayProperty;
+import io.swagger.models.properties.IntegerProperty;
 import io.swagger.models.properties.MapProperty;
 import io.swagger.models.properties.Property;
+import io.swagger.models.properties.PropertyBuilder;
 import io.swagger.models.properties.RefProperty;
 import io.swagger.models.properties.StringProperty;
+import io.swagger.models.properties.UUIDProperty;
+import io.swagger.util.AllowableValues;
+import io.swagger.util.AllowableValuesUtils;
+import io.swagger.util.PrimitiveType;
+
+import com.google.common.collect.Iterables;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,10 +47,8 @@ import javax.validation.constraints.DecimalMax;
 import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
+import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
-import javax.xml.bind.annotation.XmlAttribute;
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlElementWrapper;
 import javax.xml.bind.annotation.XmlRootElement;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
@@ -97,14 +107,9 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                                     ModelConverterContext context,
                                     Annotation[] annotations,
                                     Iterator<ModelConverter> next) {
-        Property property = null;
-        String typeName = _typeName(propType);
-
         LOGGER.debug("resolveProperty " + propType);
 
-        // primitive or null
-        property = getPrimitiveProperty(typeName);
-        // And then properties specific to subset of property types:
+        Property property = null;
         if (propType.isContainerType()) {
             JavaType keyType = propType.getKeyType();
             JavaType valueType = propType.getContentType();
@@ -118,6 +123,8 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                 }
                 property = arrayProperty;
             }
+        } else {
+            property = PrimitiveType.createProperty(propType);
         }
 
         if (property == null) {
@@ -140,7 +147,8 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
     }
 
     private boolean _isOptionalType(JavaType propType) {
-        return "com.google.common.base.Optional".equals(propType.getRawClass().getCanonicalName());
+        return Arrays.asList("com.google.common.base.Optional", "java.util.Optional")
+                .contains(propType.getRawClass().getCanonicalName());
     }
 
     public Model resolve(Type type, ModelConverterContext context, Iterator<ModelConverter> next) {
@@ -173,17 +181,12 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
         }
     }
 
-
     public Model resolve(JavaType type, ModelConverterContext context, Iterator<ModelConverter> next) {
-        if (type.isEnumType() || _typeNameResolver.isStdType(type)) {
+        if (type.isEnumType() || PrimitiveType.fromType(type) != null) {
             // We don't build models for primitive types
             return null;
         }
-        if (type.isContainerType()) {
-            // We treat collections as primitive types, just need to add models for values (if any)
-            context.resolve(type.getContentType());
-            return null;
-        }
+
         final BeanDescription beanDesc = _mapper.getSerializationConfig().introspect(type);
         // Couple of possibilities for defining
         String name = _typeName(type, beanDesc);
@@ -195,6 +198,16 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
         final ModelImpl model = new ModelImpl().type(ModelImpl.OBJECT).name(name)
                 .description(_description(beanDesc.getClassInfo()));
 
+        if (!type.isContainerType()) {
+            // define the model here to support self/cyclic referencing of models
+            context.defineModel(name, model, type, null);
+        }
+
+        if (type.isContainerType()) {
+            // We treat collections as primitive types, just need to add models for values (if any)
+            context.resolve(type.getContentType());
+            return null;
+        }
         // if XmlRootElement annotation, construct an Xml object and attach it to the model
         XmlRootElement rootAnnotation = beanDesc.getClassAnnotations().get(XmlRootElement.class);
         if (rootAnnotation != null && !"".equals(rootAnnotation.name()) && !"##default".equals(rootAnnotation.name())) {
@@ -245,13 +258,13 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                 if (member != null) {
                     String altName = member.getName();
                     if (altName != null) {
-                        if (altName.startsWith("get")) {
-                            if (!Character.isUpperCase(altName.charAt(3))) {
+                        final int length = altName.length();
+                        for (String prefix : Arrays.asList("get", "is")) {
+                            final int offset = prefix.length();
+                            if (altName.startsWith(prefix) && length > offset
+                                    && !Character.isUpperCase(altName.charAt(offset))) {
                                 propName = altName;
-                            }
-                        } else if (altName.startsWith("is")) {
-                            if (!Character.isUpperCase(altName.charAt(2))) {
-                                propName = altName;
+                                break;
                             }
                         }
                     }
@@ -290,6 +303,10 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                 annotations = annotationList.toArray(new Annotation[annotationList.size()]);
 
                 ApiModelProperty mp = member.getAnnotation(ApiModelProperty.class);
+                
+                if(mp != null && mp.readOnly()) {
+                  isReadOnly = mp.readOnly();
+                }
 
                 JavaType propType = member.getType(beanDesc.bindingsForBeanType());
 
@@ -307,7 +324,7 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                     if (or.toLowerCase().startsWith("list[")) {
                         String innerType = or.substring(5, or.length() - 1);
                         ArrayProperty p = new ArrayProperty();
-                        Property primitiveProperty = getPrimitiveProperty(innerType);
+                        Property primitiveProperty = PrimitiveType.createProperty(innerType);
                         if (primitiveProperty != null) {
                             p.setItems(primitiveProperty);
                         } else {
@@ -320,7 +337,7 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                         if (pos > 0) {
                             String innerType = or.substring(pos + 1, or.length() - 1);
                             MapProperty p = new MapProperty();
-                            Property primitiveProperty = getPrimitiveProperty(innerType);
+                            Property primitiveProperty = PrimitiveType.createProperty(innerType);
                             if (primitiveProperty != null) {
                                 p.setAdditionalProperties(primitiveProperty);
                             } else {
@@ -330,7 +347,7 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                             property = p;
                         }
                     } else {
-                        Property primitiveProperty = getPrimitiveProperty(or);
+                        Property primitiveProperty = PrimitiveType.createProperty(or);
                         if (primitiveProperty != null) {
                             property = primitiveProperty;
                         } else {
@@ -347,7 +364,12 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                 if (property == null) {
                     if (mp != null && StringUtils.isNotEmpty(mp.reference())) {
                         property = new RefProperty(mp.reference());
-                    } else {
+                    } else if (member.getAnnotation(JsonIdentityInfo.class) != null) {
+                        property = GeneratorWrapper.processJsonIdentity(propType, context, _mapper,
+                                member.getAnnotation(JsonIdentityInfo.class),
+                                member.getAnnotation(JsonIdentityReference.class));
+                    }
+                    if (property == null) {
                         property = context.resolveProperty(propType, annotations);
                     }
                 }
@@ -382,85 +404,18 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                             property.setReadOnly(isReadOnly);
                         }
                     }
-
-                    if (property instanceof StringProperty) {
-                        if (mp != null) {
-                            String allowableValues = mp.allowableValues();
-                            LOGGER.debug("allowableValues " + allowableValues);
-                            if (!"".equals(allowableValues)) {
-                                String[] parts = allowableValues.split(",");
-                                LOGGER.debug("found " + parts.length + " parts");
-                                for (String part : parts) {
-                                    if (property instanceof StringProperty) {
-                                        StringProperty sp = (StringProperty) property;
-                                        sp._enum(part.trim());
-                                        LOGGER.debug("added enum value " + part);
-                                    }
-                                }
-                            }
+                    if (mp != null) {
+                        final AllowableValues allowableValues = AllowableValuesUtils.create(mp.allowableValues());
+                        if (allowableValues != null) {
+                            final Map<PropertyBuilder.PropertyId, Object> args = allowableValues.asPropertyArguments();
+                            PropertyBuilder.merge(property, args);
                         }
                     }
-
-                    if (property != null) {
-                        // check for XML annotations
-                        XmlElementWrapper wrapper = member.getAnnotation(XmlElementWrapper.class);
-
-                        if (wrapper != null) {
-                            Xml xml = new Xml();
-                            xml.setWrapped(true);
-
-                            if (wrapper.name() != null) {
-                                if ("##default".equals(wrapper.name())) {
-                                    xml.setName(propName);
-                                } else if (!"".equals(wrapper.name())) {
-                                    xml.setName(wrapper.name());
-                                }
-                            }
-                            if (wrapper.namespace() != null && !"".equals(wrapper.namespace()) && !"##default".equals(wrapper.namespace())) {
-                                xml.setNamespace(wrapper.namespace());
-                            }
-
-                            property.setXml(xml);
-                        }
-
-                        XmlElement element = member.getAnnotation(XmlElement.class);
-                        if (element != null) {
-                            if (!element.name().isEmpty()) {
-                                // don't set Xml object if name is same
-                                if (!element.name().equals(propName) && !"##default".equals(element.name())) {
-                                    Xml xml = property.getXml();
-                                    if (xml == null) {
-                                        xml = new Xml();
-                                        property.setXml(xml);
-                                    }
-                                    xml.setName(element.name());
-                                }
-                            }
-                        }
-                        XmlAttribute attr = member.getAnnotation(XmlAttribute.class);
-                        if (attr != null) {
-                            if (!"".equals(attr.name())) {
-                                // don't set Xml object if name is same
-                                if (!attr.name().equals(propName) && !"##default".equals(attr.name())) {
-                                    Xml xml = property.getXml();
-                                    if (xml == null) {
-                                        xml = new Xml();
-                                        property.setXml(xml);
-                                    }
-                                    xml.setName(attr.name());
-                                }
-                            }
-                        }
-
-                    }
+                    JAXBAnnotationsHelper.apply(member, property);
                     applyBeanValidatorAnnotations(property, annotations);
                     props.add(property);
                 }
             }
-        }
-
-        if (!resolveSubtypes(model, beanDesc, context)) {
-            model.setDiscriminator(null);
         }
 
         Collections.sort(props, getPropertyComparator());
@@ -470,7 +425,137 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
             modelProps.put(prop.getName(), prop);
         }
         model.setProperties(modelProps);
+
+        if (!resolveSubtypes(model, beanDesc, context)) {
+            model.setDiscriminator(null);
+        }
+
         return model;
+    }
+
+    private enum GeneratorWrapper {
+        PROPERTY(ObjectIdGenerators.PropertyGenerator.class) {
+            @Override
+            protected Property processAsProperty(String propertyName, JavaType type,
+                                                 ModelConverterContext context, ObjectMapper mapper) {
+                /*
+                 * When generator = ObjectIdGenerators.PropertyGenerator.class and
+                 * @JsonIdentityReference(alwaysAsId = false) then property is serialized
+                 * in the same way it is done without @JsonIdentityInfo annotation.
+                 */
+                return null;
+            }
+
+            @Override
+            protected Property processAsId(String propertyName, JavaType type,
+                                           ModelConverterContext context, ObjectMapper mapper) {
+                final BeanDescription beanDesc = mapper.getSerializationConfig().introspect(type);
+                for (BeanPropertyDefinition def : beanDesc.findProperties()) {
+                    final String name = def.getName();
+                    if (name != null && name.equals(propertyName)) {
+                        final AnnotatedMember propMember = def.getPrimaryMember();
+                        final JavaType propType = propMember.getType(beanDesc.bindingsForBeanType());
+                        if (PrimitiveType.fromType(propType) != null) {
+                            return PrimitiveType.createProperty(propType);
+                        } else {
+                            return context.resolveProperty(propType,
+                                    Iterables.toArray(propMember.annotations(), Annotation.class));
+                        }
+                    }
+                }
+                return null;
+            }
+        },
+        INT(ObjectIdGenerators.IntSequenceGenerator.class) {
+            @Override
+            protected Property processAsProperty(String propertyName, JavaType type,
+                                                 ModelConverterContext context, ObjectMapper mapper) {
+                Property id = new IntegerProperty();
+                return process(id, propertyName, type, context);
+            }
+
+            @Override
+            protected Property processAsId(String propertyName, JavaType type,
+                                           ModelConverterContext context, ObjectMapper mapper) {
+                return new IntegerProperty();
+            }
+        },
+        UUID(ObjectIdGenerators.UUIDGenerator.class) {
+            @Override
+            protected Property processAsProperty(String propertyName, JavaType type,
+                                                 ModelConverterContext context, ObjectMapper mapper) {
+                Property id = new UUIDProperty();
+                return process(id, propertyName, type, context);
+            }
+
+            @Override
+            protected Property processAsId(String propertyName, JavaType type,
+                                           ModelConverterContext context, ObjectMapper mapper) {
+                return new UUIDProperty();
+            }
+        },
+        NONE(ObjectIdGenerators.None.class) {
+            // When generator = ObjectIdGenerators.None.class property should be processed as normal property.
+            @Override
+            protected Property processAsProperty(String propertyName, JavaType type,
+                                                 ModelConverterContext context, ObjectMapper mapper) {
+                return null;
+            }
+
+            @Override
+            protected Property processAsId(String propertyName, JavaType type,
+                                           ModelConverterContext context, ObjectMapper mapper) {
+                return null;
+            }
+        };
+
+        private final Class<? extends ObjectIdGenerator> generator;
+
+        GeneratorWrapper(Class<? extends ObjectIdGenerator> generator) {
+            this.generator = generator;
+        }
+
+        protected abstract Property processAsProperty(String propertyName, JavaType type,
+                                                      ModelConverterContext context, ObjectMapper mapper);
+
+        protected abstract Property processAsId(String propertyName, JavaType type,
+                                                ModelConverterContext context, ObjectMapper mapper);
+
+        public static Property processJsonIdentity(JavaType type, ModelConverterContext context,
+                                                   ObjectMapper mapper, JsonIdentityInfo identityInfo,
+                                                   JsonIdentityReference identityReference) {
+            final GeneratorWrapper wrapper = identityInfo != null ? getWrapper(identityInfo.generator()) : null;
+            if (wrapper == null) {
+                return null;
+            }
+            if (identityReference != null && identityReference.alwaysAsId()) {
+                return wrapper.processAsId(identityInfo.property(), type, context, mapper);
+            } else {
+                return wrapper.processAsProperty(identityInfo.property(), type, context, mapper);
+            }
+        }
+
+        private static GeneratorWrapper getWrapper(Class<?> generator) {
+            for (GeneratorWrapper value : GeneratorWrapper.values()) {
+                if (value.generator.isAssignableFrom(generator)) {
+                    return value;
+                }
+            }
+            return null;
+        }
+
+        private static Property process(Property id, String propertyName, JavaType type,
+                                        ModelConverterContext context) {
+            id.setName(propertyName);
+            final Model model = context.resolve(type);
+            if (model instanceof ModelImpl) {
+                ModelImpl mi = (ModelImpl) model;
+                mi.getProperties().put(propertyName, id);
+                return new RefProperty(StringUtils.isNotEmpty(mi.getReference())
+                        ? mi.getReference() : mi.getName());
+            }
+            return null;
+        }
     }
 
     protected void applyBeanValidatorAnnotations(Property property, Annotation[] annotations) {
@@ -503,11 +588,14 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                 AbstractNumericProperty ap = (AbstractNumericProperty) property;
                 ap.setMinimum(new Double(size.min()));
                 ap.setMaximum(new Double(size.max()));
-            }
-            if (property instanceof StringProperty) {
+            } else if (property instanceof StringProperty) {
                 StringProperty sp = (StringProperty) property;
                 sp.minLength(new Integer(size.min()));
                 sp.maxLength(new Integer(size.max()));
+            } else if (property instanceof ArrayProperty) {
+                ArrayProperty sp = (ArrayProperty) property;
+                sp.setMinItems(size.min());
+                sp.setMaxItems(size.max());
             }
         }
         if (annos.containsKey("javax.validation.constraints.DecimalMin")) {
@@ -530,6 +618,13 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                 } else {
                     ap.setExclusiveMaximum(!max.inclusive());
                 }
+            }
+        }
+        if (annos.containsKey("javax.validation.constraints.Pattern")) {
+            Pattern pattern = (Pattern) annos.get("javax.validation.constraints.Pattern");
+            if (property instanceof StringProperty) {
+                StringProperty ap = (StringProperty) property;
+                ap.setPattern(pattern.regexp());
             }
         }
     }
@@ -568,8 +663,10 @@ public class ModelResolver extends AbstractModelConverter implements ModelConver
                 final Map<String, Property> baseProps = model.getProperties();
                 final Map<String, Property> subtypeProps = impl.getProperties();
                 if (baseProps != null && subtypeProps != null) {
-                    for (String remove : baseProps.keySet()) {
-                        subtypeProps.remove(remove);
+                    for (Map.Entry<String, Property> entry : baseProps.entrySet()) {
+                        if (entry.getValue().equals(subtypeProps.get(entry.getKey()))) {
+                            subtypeProps.remove(entry.getKey());
+                        }
                     }
                 }
 

@@ -2,20 +2,35 @@ package io.swagger.models.properties;
 
 import io.swagger.models.Xml;
 
-public class DoubleProperty extends AbstractNumericProperty implements Property {
+import java.util.ArrayList;
+import java.util.List;
+
+public class DoubleProperty extends DecimalProperty {
+    private static final String FORMAT = "double";
     protected Double _default;
+    protected List<Double> _enum;
 
     public DoubleProperty() {
-        super.type = "number";
-        super.format = "double";
+        super(FORMAT);
+    }
+
+    public DoubleProperty _enum(Double value) {
+        if (this._enum == null) {
+            this._enum = new ArrayList<Double>();
+        }
+        if (!_enum.contains(value)) {
+            _enum.add(value);
+        }
+        return this;
+    }
+
+    public DoubleProperty _enum(List<Double> value) {
+        this._enum = value;
+        return this;
     }
 
     public static boolean isType(String type, String format) {
-        if ("number".equals(type) && "double".equals(format)) {
-            return true;
-        } else {
-            return false;
-        }
+        return TYPE.equals(type) && FORMAT.equals(format);
     }
 
     public DoubleProperty xml(Xml xml) {
@@ -56,23 +71,28 @@ public class DoubleProperty extends AbstractNumericProperty implements Property 
         this._default = _default;
     }
 
+    public List<Double> getEnum() {
+        return _enum;
+    }
+
+    public void setEnum(List<Double> _enum) {
+        this._enum = _enum;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = 1;
+        int result = super.hashCode();
         result = prime * result + ((_default == null) ? 0 : _default.hashCode());
         return result;
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
+        if (!super.equals(obj)) {
             return false;
         }
-        if (getClass() != obj.getClass()) {
+        if (!(obj instanceof DoubleProperty)) {
             return false;
         }
         DoubleProperty other = (DoubleProperty) obj;

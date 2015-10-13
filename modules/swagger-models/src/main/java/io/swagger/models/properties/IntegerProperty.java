@@ -2,21 +2,35 @@ package io.swagger.models.properties;
 
 import io.swagger.models.Xml;
 
-public class IntegerProperty extends AbstractNumericProperty implements Property {
-    public static final String TYPE = "integer";
+import java.util.ArrayList;
+import java.util.List;
+
+public class IntegerProperty extends BaseIntegerProperty {
+    private static final String FORMAT = "int32";
     protected Integer _default;
+    protected List<Integer> _enum;
 
     public IntegerProperty() {
-        super.type = TYPE;
-        super.format = "int32";
+        super(FORMAT);
+    }
+
+    public IntegerProperty _enum(Integer value) {
+        if (this._enum == null) {
+            this._enum = new ArrayList<Integer>();
+        }
+        if (!_enum.contains(value)) {
+            _enum.add(value);
+        }
+        return this;
+    }
+
+    public IntegerProperty _enum(List<Integer> value) {
+        this._enum = value;
+        return this;
     }
 
     public static boolean isType(String type, String format) {
-        if (TYPE.equals(type) && "int32".equals(format)) {
-            return true;
-        } else {
-            return false;
-        }
+        return TYPE.equals(type) && FORMAT.equals(format);
     }
 
     public IntegerProperty xml(Xml xml) {
@@ -57,23 +71,28 @@ public class IntegerProperty extends AbstractNumericProperty implements Property
         this._default = _default;
     }
 
+    public List<Integer> getEnum() {
+        return _enum;
+    }
+
+    public void setEnum(List<Integer> _enum) {
+        this._enum = _enum;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = 1;
+        int result = super.hashCode();
         result = prime * result + ((_default == null) ? 0 : _default.hashCode());
         return result;
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
+        if (!super.equals(obj)) {
             return false;
         }
-        if (getClass() != obj.getClass()) {
+        if (!(obj instanceof IntegerProperty)) {
             return false;
         }
         IntegerProperty other = (IntegerProperty) obj;

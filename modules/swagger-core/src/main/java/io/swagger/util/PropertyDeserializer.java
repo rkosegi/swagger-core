@@ -1,26 +1,35 @@
 package io.swagger.util;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.DoubleNode;
+import com.fasterxml.jackson.databind.node.FloatNode;
+import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.NumericNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.swagger.models.Xml;
 import io.swagger.models.properties.ArrayProperty;
 import io.swagger.models.properties.MapProperty;
 import io.swagger.models.properties.ObjectProperty;
 import io.swagger.models.properties.Property;
 import io.swagger.models.properties.PropertyBuilder;
 import io.swagger.models.properties.RefProperty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
 
 public class PropertyDeserializer extends JsonDeserializer<Property> {
     Logger LOGGER = LoggerFactory.getLogger(PropertyDeserializer.class);
@@ -51,13 +60,36 @@ public class PropertyDeserializer extends JsonDeserializer<Property> {
         if (detailNode != null) {
             ArrayNode an = (ArrayNode) detailNode;
             for (JsonNode child : an) {
-                if (child instanceof TextNode) {
+                if (child instanceof TextNode ||
+                    child instanceof NumericNode ||
+                    child instanceof IntNode ||
+                    child instanceof LongNode ||
+                    child instanceof DoubleNode || 
+                    child instanceof FloatNode) {
                     result.add(child.asText());
                 }
             }
         }
 
         return result.isEmpty() ? null : result;
+    }
+
+    //because of the complexity of deserializing properties we must handle vendor extensions by hand
+    private static Map<String, Object> getVendorExtensions(JsonNode node) {
+        Map<String, Object> result = new HashMap<String, Object>();
+
+        Iterator<String> fieldNameIter = node.fieldNames();
+        while (fieldNameIter.hasNext()) {
+            String fieldName = fieldNameIter.next();
+
+            if(fieldName.startsWith("x-")) {
+                JsonNode extensionField = node.get(fieldName);
+
+                Object extensionObject = Json.mapper().convertValue(extensionField, Object.class);
+                result.put(fieldName, extensionObject);
+            }
+        }
+        return result;
     }
 
     private static JsonNode getDetailNode(JsonNode node, PropertyBuilder.PropertyId type) {
@@ -68,33 +100,87 @@ public class PropertyDeserializer extends JsonDeserializer<Property> {
     public Property deserialize(JsonParser jp, DeserializationContext ctxt)
             throws IOException, JsonProcessingException {
         JsonNode node = jp.getCodec().readTree(jp);
-        return propertyFromNode(node);
+        Property property = propertyFromNode(node);
+        if(property != null) {
+            property.setXml(getXml(node));
+        }
+        return property;
+    }
+
+    public Xml getXml(JsonNode node) {
+        Xml xml = null;
+
+        if (node instanceof ObjectNode) {
+            ObjectNode obj = (ObjectNode) ((ObjectNode) node).get("xml");
+            if (obj != null) {
+                xml = new Xml();
+                JsonNode n = obj.get("name");
+                if (n != null) {
+                    xml.name(n.asText());
+                }
+                n = obj.get("namespace");
+                if (n != null) {
+                    xml.namespace(n.asText());
+                }
+                n = obj.get("prefix");
+                if (n != null) {
+                    xml.prefix(n.asText());
+                }
+                n = obj.get("attribute");
+                if (n != null) {
+                    xml.attribute(n.asBoolean());
+                }
+                n = obj.get("wrapped");
+                if (n != null) {
+                    xml.wrapped(n.asBoolean());
+                }
+            }
+        }
+        return xml;
     }
 
     Property propertyFromNode(JsonNode node) {
         final String type = getString(node, PropertyBuilder.PropertyId.TYPE);
         final String format = getString(node, PropertyBuilder.PropertyId.FORMAT);
         final String description = getString(node, PropertyBuilder.PropertyId.DESCRIPTION);
+        final Xml xml = getXml(node);
 
         JsonNode detailNode = node.get("$ref");
         if (detailNode != null) {
             return new RefProperty(detailNode.asText()).description(description);
         }
 
-        if (ObjectProperty.isType(type)) {
+        if (ObjectProperty.isType(type) || node.get("properties") != null) {
             detailNode = node.get("additionalProperties");
             if (detailNode != null) {
                 Property items = propertyFromNode(detailNode);
                 if (items != null) {
-                    return new MapProperty(items).description(description);
+                    MapProperty mapProperty = new MapProperty(items).description(description);
+                    mapProperty.setVendorExtensionMap(getVendorExtensions(node));
+                    return mapProperty;
                 }
+            } else {
+              detailNode = node.get("properties");
+              Map<String, Property> properties = new HashMap<String, Property>();
+              if(detailNode != null){
+                  for(Iterator<Map.Entry<String,JsonNode>> iter = detailNode.fields(); iter.hasNext();){
+                      Map.Entry<String,JsonNode> field = iter.next();
+                      Property property = propertyFromNode(field.getValue());
+                      properties.put(field.getKey(), property);
+                  }
+              }
+                ObjectProperty objectProperty = new ObjectProperty(properties).description(description);
+                objectProperty.setVendorExtensionMap(getVendorExtensions(node));
+                return objectProperty;
             }
         }
         if (ArrayProperty.isType(type)) {
             detailNode = node.get("items");
             if (detailNode != null) {
                 Property subProperty = propertyFromNode(detailNode);
-                return new ArrayProperty().items(subProperty).description(description);
+                ArrayProperty arrayProperty = new ArrayProperty().items(subProperty).description(description);
+                arrayProperty.setVendorExtensionMap(getVendorExtensions(node));
+                return arrayProperty;
             }
         }
 
@@ -119,13 +205,15 @@ public class PropertyDeserializer extends JsonDeserializer<Property> {
         args.put(PropertyBuilder.PropertyId.EXCLUSIVE_MINIMUM, getBoolean(node, PropertyBuilder.PropertyId.EXCLUSIVE_MINIMUM));
         args.put(PropertyBuilder.PropertyId.EXCLUSIVE_MAXIMUM, getBoolean(node, PropertyBuilder.PropertyId.EXCLUSIVE_MAXIMUM));
         args.put(PropertyBuilder.PropertyId.UNIQUE_ITEMS, getBoolean(node, PropertyBuilder.PropertyId.UNIQUE_ITEMS));
-
+        args.put(PropertyBuilder.PropertyId.READ_ONLY, getBoolean(node, PropertyBuilder.PropertyId.READ_ONLY));
+        args.put(PropertyBuilder.PropertyId.VENDOR_EXTENSIONS, getVendorExtensions(node));
         Property output = PropertyBuilder.build(type, format, args);
         if (output == null) {
             LOGGER.warn("no property from " + type + ", " + format + ", " + args);
             return null;
         }
         output.setDescription(description);
+        
         return output;
     }
 }

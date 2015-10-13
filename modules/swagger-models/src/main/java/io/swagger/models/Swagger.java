@@ -1,5 +1,6 @@
 package io.swagger.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.models.auth.SecuritySchemeDefinition;
 import io.swagger.models.parameters.Parameter;
 
@@ -19,11 +20,12 @@ public class Swagger {
     protected List<Scheme> schemes;
     protected List<String> consumes;
     protected List<String> produces;
-    protected List<SecurityRequirement> securityRequirements;
+    protected List<SecurityRequirement> security;
     protected Map<String, Path> paths;
     protected Map<String, SecuritySchemeDefinition> securityDefinitions;
     protected Map<String, Model> definitions;
     protected Map<String, Parameter> parameters;
+    protected Map<String, Response> responses;
     protected ExternalDocs externalDocs;
 
     // builders
@@ -100,6 +102,19 @@ public class Swagger {
         return this;
     }
 
+    public Swagger responses(Map<String, Response> responses) {
+        this.responses = responses;
+        return this;
+    }
+
+    public Swagger response(String key, Response response) {
+        if (this.responses == null) {
+            this.responses = new LinkedHashMap<String, Response>();
+        }
+        this.responses.put(key, response);
+        return this;
+    }
+
     public Swagger parameter(String key, Parameter parameter) {
         this.addParameter(key, parameter);
         return this;
@@ -112,6 +127,11 @@ public class Swagger {
 
     public Swagger model(String name, Model model) {
         this.addDefinition(name, model);
+        return this;
+    }
+
+    public Swagger security(SecurityRequirement securityRequirement) {
+        this.addSecurity(securityRequirement);
         return this;
     }
 
@@ -267,19 +287,36 @@ public class Swagger {
         this.securityDefinitions.put(name, securityDefinition);
     }
 
+    @Deprecated
     public List<SecurityRequirement> getSecurityRequirement() {
-        return securityRequirements;
+        return security;
     }
 
+    @Deprecated
     public void setSecurityRequirement(List<SecurityRequirement> securityRequirements) {
-        this.securityRequirements = securityRequirements;
+        this.security = securityRequirements;
     }
 
+    @Deprecated
     public void addSecurityDefinition(SecurityRequirement securityRequirement) {
-        if (this.securityRequirements == null) {
-            this.securityRequirements = new ArrayList<SecurityRequirement>();
+        this.addSecurity(securityRequirement);
+    }
+
+    @JsonIgnore //remove JsonIgnore when getSecurityRequirement() method is deleted in next major version
+    public List<SecurityRequirement> getSecurity() {
+        return security;
+    }
+
+    @JsonIgnore  //remove JsonIgnore when setSecurityRequirement() method is deleted in next major version
+    public void setSecurity(List<SecurityRequirement> securityRequirements) {
+        this.security = securityRequirements;
+    }
+
+    public void addSecurity(SecurityRequirement securityRequirement) {
+        if (this.security == null) {
+            this.security = new ArrayList<SecurityRequirement>();
         }
-        this.securityRequirements.add(securityRequirement);
+        this.security.add(securityRequirement);
     }
 
     public Map<String, Model> getDefinitions() {
@@ -319,6 +356,14 @@ public class Swagger {
         this.parameters.put(key, parameter);
     }
 
+    public Map<String, Response> getResponses() {
+        return responses;
+    }
+
+    public void setResponses(Map<String, Response> responses) {
+        this.responses = responses;
+    }
+
     public ExternalDocs getExternalDocs() {
         return externalDocs;
     }
@@ -350,7 +395,7 @@ public class Swagger {
                 .hashCode());
         result = prime
                 * result
-                + ((securityRequirements == null) ? 0 : securityRequirements
+                + ((security == null) ? 0 : security
                 .hashCode());
         result = prime * result + ((swagger == null) ? 0 : swagger.hashCode());
         result = prime * result + ((tags == null) ? 0 : tags.hashCode());
@@ -446,11 +491,11 @@ public class Swagger {
         } else if (!securityDefinitions.equals(other.securityDefinitions)) {
             return false;
         }
-        if (securityRequirements == null) {
-            if (other.securityRequirements != null) {
+        if (security == null) {
+            if (other.security != null) {
                 return false;
             }
-        } else if (!securityRequirements.equals(other.securityRequirements)) {
+        } else if (!security.equals(other.security)) {
             return false;
         }
         if (swagger == null) {

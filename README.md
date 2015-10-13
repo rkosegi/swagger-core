@@ -1,6 +1,7 @@
 # Swagger Core library
 
 [![Build Status](https://travis-ci.org/swagger-api/swagger-core.svg?branch=master)](https://travis-ci.org/swagger-api/swagger-core)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.swagger/swagger-project/badge.svg?style=plastic)](https://maven-badges.herokuapp.com/maven-central/io.swagger/swagger-project)
 
 The goal of Swagger™ is to define a standard, language-agnostic interface to REST APIs which allows both humans and computers to discover and understand the capabilities of the service without access to source code, documentation, or through network traffic inspection. When properly defined via Swagger, a consumer can understand and interact with the remote service with a minimal amount of implementation logic. Similar to what interfaces have done for lower-level programming, Swagger removes the guesswork in calling the service.
 
@@ -22,14 +23,15 @@ The following methods are available to obtain support for Swagger:
 
 
 ## Get started with Swagger!
-See the guide on [getting started with swagger](https://github.com/swagger-api/swagger-core/wiki/Swagger-Core-JAX-RS-Project-Setup) to get started with adding swagger to your API.
+See the guide on [getting started with swagger](https://github.com/swagger-api/swagger-core/wiki/Swagger-Core-JAX-RS-Project-Setup-1.5.X) to get started with adding swagger to your API.
 
 ## Compatibility
 The Swagger Specification has undergone 3 revisions since initial creation in 2010.  The swagger-core project has the following compatibilities with the swagger specification:
 
 Swagger core Version      | Release Date | Swagger Spec compatibility | Notes | Status
 ------------------------- | ------------ | -------------------------- | ----- | ----
-1.5.0                     | 2015-06-06   | 2.0           | [master](https://github.com/swagger-api/swagger-core) | Supported
+1.5.4-SNAPSHOT            |              | 2.0           | [master](https://github.com/swagger-api/swagger-core) | Under Development
+1.5.3 (**current stable**)        | 2015-08-04   | 2.0           | [tag v1.5.3](https://github.com/swagger-api/swagger-core/tree/v1.5.3) | Supported
 1.3.12                    | 2014-12-23   | 1.2           | [tag v1.3.12](https://github.com/swagger-api/swagger-core/tree/v1.3.12) | Supported
 1.2.4                     | 2013-06-19   | 1.1           | [tag swagger-project_2.10.0-1.2.4](https://github.com/swagger-api/swagger-core/tree/swagger-project_2.10.0-1.2.4) | Deprecated
 1.0.0                     | 2011-10-16   | 1.0           | [tag v1.0](https://github.com/swagger-api/swagger-core/tree/v1.0) | Deprecated
@@ -48,10 +50,10 @@ You need the following installed and available in your $PATH:
 
 * Java 6 (http://java.oracle.com)
 * Apache maven 3.0.4 or greater (http://maven.apache.org/)
-* Jackson 2.4.2 or greater
+* Jackson 2.4.5 or greater
 
 
-### To build from source (currently 1.5.0)
+### To build from source (currently 1.5.4-SNAPSHOT)
 ```
 # first time building locally
 mvn -N

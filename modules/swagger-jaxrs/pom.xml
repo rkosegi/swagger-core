@@ -4,12 +4,12 @@
     <parent>
         <groupId>io.swagger</groupId>
         <artifactId>swagger-project</artifactId>
-        <version>1.5.0</version>
+        <version>1.5.4-SNAPSHOT</version>
         <relativePath>../..</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <artifactId>swagger-jaxrs</artifactId>
-    <packaging>jar</packaging>
+    <packaging>bundle</packaging>
     <name>swagger-jaxrs</name>
     <build>
         <sourceDirectory>src/main/java</sourceDirectory>
@@ -37,50 +37,55 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>2.4</version>
+                <groupId>org.apache.felix</groupId>
+                <artifactId>maven-bundle-plugin</artifactId>
+                <version>${felix-version}</version>
+                <extensions>true</extensions>
                 <configuration>
-                    <archive>
-                        <manifestEntries>
-                            <mode>development</mode>
-                            <url>${project.url}</url>
-                            <implementation-version>${project.version}</implementation-version>
-                            <package>io.swagger</package>
-                        </manifestEntries>
-                    </archive>
+                    <instructions>
+                        <Export-Package>
+                            io.swagger.jaxrs,
+                            io.swagger.jaxrs.config,
+                            io.swagger.jaxrs.ext,
+                            io.swagger.jaxrs.listing
+                        </Export-Package>
+                        <Import-Package>
+                            javax.ws.rs*;version="[1.1,3)",
+                            *
+                        </Import-Package>
+                    </instructions>
                 </configuration>
             </plugin>
         </plugins>
     </build>
     <dependencies>
         <dependency>
-            <groupId>org.scalatest</groupId>
-            <artifactId>scalatest_2.10</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
             <version>${jackson-version}</version>
-            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-xml</artifactId>
             <version>${jackson-version}</version>
-            <scope>compile</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-annotations</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.swagger</groupId>
             <artifactId>swagger-core</artifactId>
             <version>${project.parent.version}</version>
-            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>${project.parent.groupId}</groupId>
+            <artifactId>swagger-core</artifactId>
+            <version>${project.parent.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>javax.servlet</groupId>
@@ -90,18 +95,20 @@
             <groupId>javax.ws.rs</groupId>
             <artifactId>jsr311-api</artifactId>
             <version>1.1.1</version>
-            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.reflections</groupId>
             <artifactId>reflections</artifactId>
-            <version>0.9.9</version>
         </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>com.fasterxml.jackson.jaxrs</groupId>
             <artifactId>jackson-jaxrs-json-provider</artifactId>
             <version>${jackson-version}</version>
-            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
@@ -116,15 +123,22 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>org.scala-lang</groupId>
-            <artifactId>scala-library</artifactId>
-            <version>${scala-version}</version>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-all</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
         </dependency>
     </dependencies>
     <properties>
-        <coverage.complexity.minimum>0.29</coverage.complexity.minimum>
+        <coverage.complexity.minimum>0.60</coverage.complexity.minimum>
         <coverage.line.minimum>0.00</coverage.line.minimum>
-        <coverage.missed.classes>5</coverage.missed.classes>
+        <coverage.missed.classes>3</coverage.missed.classes>
     </properties>
 </project>

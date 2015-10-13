@@ -2,20 +2,36 @@ package io.swagger.models.properties;
 
 import io.swagger.models.Xml;
 
-public class FloatProperty extends AbstractNumericProperty implements Property {
+import java.util.ArrayList;
+import java.util.List;
+
+public class FloatProperty extends DecimalProperty {
+    private static final String FORMAT = "float";
+    protected List<Float> _enum;
+
     protected Float _default;
 
     public FloatProperty() {
-        super.type = "number";
-        super.format = "float";
+        super(FORMAT);
+    }
+
+    public FloatProperty _enum(Float value) {
+        if (this._enum == null) {
+            this._enum = new ArrayList<Float>();
+        }
+        if (!_enum.contains(value)) {
+            _enum.add(value);
+        }
+        return this;
+    }
+
+    public FloatProperty _enum(List<Float> value) {
+        this._enum = value;
+        return this;
     }
 
     public static boolean isType(String type, String format) {
-        if ("number".equals(type) && "float".equals(format)) {
-            return true;
-        } else {
-            return false;
-        }
+        return TYPE.equals(type) && FORMAT.equals(format);
     }
 
     public FloatProperty xml(Xml xml) {
@@ -56,23 +72,28 @@ public class FloatProperty extends AbstractNumericProperty implements Property {
         this._default = _default;
     }
 
+    public List<Float> getEnum() {
+        return _enum;
+    }
+
+    public void setEnum(List<Float> _enum) {
+        this._enum = _enum;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = 1;
+        int result = super.hashCode();
         result = prime * result + ((_default == null) ? 0 : _default.hashCode());
         return result;
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
+        if (!super.equals(obj)) {
             return false;
         }
-        if (getClass() != obj.getClass()) {
+        if (!(obj instanceof FloatProperty)) {
             return false;
         }
         FloatProperty other = (FloatProperty) obj;

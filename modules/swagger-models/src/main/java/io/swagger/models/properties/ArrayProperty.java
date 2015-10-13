@@ -6,6 +6,8 @@ public class ArrayProperty extends AbstractProperty implements Property {
     public static final String TYPE = "array";
     protected Boolean uniqueItems;
     protected Property items;
+    private Integer maxItems;
+    private Integer minItems;
 
     public ArrayProperty() {
         super.type = TYPE;
@@ -53,28 +55,42 @@ public class ArrayProperty extends AbstractProperty implements Property {
     }
 
     public void setUniqueItems(Boolean uniqueItems) {
-        this.uniqueItems = uniqueItems ? true : null;
+        this.uniqueItems = Boolean.TRUE.equals(uniqueItems) ? true : null;
+    }
+
+    public Integer getMaxItems() {
+        return maxItems;
+    }
+
+    public void setMaxItems(Integer maxItems) {
+        this.maxItems = maxItems;
+    }
+
+    public Integer getMinItems() {
+        return minItems;
+    }
+
+    public void setMinItems(Integer minItems) {
+        this.minItems = minItems;
     }
 
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = 1;
+        int result = super.hashCode();
         result = prime * result + ((items == null) ? 0 : items.hashCode());
-        result = prime * result
-                + ((uniqueItems == null) ? 0 : uniqueItems.hashCode());
+        result = prime * result + ((uniqueItems == null) ? 0 : uniqueItems.hashCode());
+        result = prime * result + ((maxItems == null) ? 0 : maxItems.hashCode());
+        result = prime * result + ((minItems == null) ? 0 : minItems.hashCode());
         return result;
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
+        if (!super.equals(obj)) {
             return false;
         }
-        if (getClass() != obj.getClass()) {
+        if (!(obj instanceof ArrayProperty)) {
             return false;
         }
         ArrayProperty other = (ArrayProperty) obj;
@@ -90,6 +106,20 @@ public class ArrayProperty extends AbstractProperty implements Property {
                 return false;
             }
         } else if (!uniqueItems.equals(other.uniqueItems)) {
+            return false;
+        }
+        if (maxItems == null) {
+            if (other.maxItems != null) {
+                return false;
+            }
+        } else if (!maxItems.equals(other.maxItems)) {
+            return false;
+        }
+        if (minItems == null) {
+            if (other.minItems != null) {
+                return false;
+            }
+        } else if (!minItems.equals(other.minItems)) {
             return false;
         }
         return true;

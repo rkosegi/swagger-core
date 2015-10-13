@@ -5,29 +5,57 @@ import io.swagger.models.Xml;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * The StringProperty class defines properties for strings without a specific format, for standard formats which don't
+ * need specific handling, or for custom formats.
+ */
 public class StringProperty extends AbstractProperty implements Property {
+    public static final String TYPE = "string";
     protected List<String> _enum;
     protected Integer minLength = null, maxLength = null;
     protected String pattern = null;
     protected String _default;
 
+    public enum Format {
+        BYTE("byte"),
+        URI("uri"),
+        URL("url");
+
+        private final String name;
+
+        private Format(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public static Format fromName(String name) {
+            for (Format item : values()) {
+                if (item.getName().equals(name)) {
+                    return item;
+                }
+            }
+            return null;
+        }
+    }
+
     public StringProperty() {
-        this(null);
+        this((String) null);
+    }
+
+    public StringProperty(Format format) {
+        this(format.getName());
     }
 
     public StringProperty(String format) {
-        super.type = "string";
+        super.type = TYPE;
         super.format = format;
     }
 
-    //TODO: implement additional formats
     public static boolean isType(String type, String format) {
-        boolean formatMatchStringType = "uri".equals(format) || "byte".equals(format) || "url".equals(format);
-        if ("string".equals(type) && (format == null || formatMatchStringType)) {
-            return true;
-        } else {
-            return false;
-        }
+        return TYPE.equals(type);
     }
 
     public StringProperty xml(Xml xml) {
@@ -118,7 +146,7 @@ public class StringProperty extends AbstractProperty implements Property {
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = 1;
+        int result = super.hashCode();
         result = prime * result + ((_default == null) ? 0 : _default.hashCode());
         result = prime * result + ((_enum == null) ? 0 : _enum.hashCode());
         result = prime * result + ((maxLength == null) ? 0 : maxLength.hashCode());
@@ -129,13 +157,10 @@ public class StringProperty extends AbstractProperty implements Property {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
+        if (!super.equals(obj)) {
             return false;
         }
-        if (getClass() != obj.getClass()) {
+        if (!(obj instanceof StringProperty)) {
             return false;
         }
         StringProperty other = (StringProperty) obj;

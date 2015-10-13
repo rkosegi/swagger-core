@@ -4,15 +4,17 @@ import io.swagger.models.ArrayModel;
 import io.swagger.models.Model;
 import io.swagger.models.ModelImpl;
 import io.swagger.models.RefModel;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
 public class PropertyBuilder {
-    static Logger LOGGER = LoggerFactory.getLogger(PropertyBuilder.class);
+    static final Logger LOGGER = LoggerFactory.getLogger(PropertyBuilder.class);
 
     /**
      * Creates new property on the passed arguments.
@@ -27,10 +29,16 @@ public class PropertyBuilder {
         if (processor == null) {
             return null;
         }
-        if (args == null) {
-            args = Collections.emptyMap();
+        final Map<PropertyId, Object> safeArgs = args == null ? Collections.<PropertyId, Object>emptyMap() : args;
+        final Map<PropertyId, Object> fixedArgs;
+        if (format != null) {
+            fixedArgs = new EnumMap<PropertyId, Object>(PropertyId.class);
+            fixedArgs.putAll(safeArgs);
+            fixedArgs.put(PropertyId.FORMAT, format);
+        } else {
+            fixedArgs = safeArgs;
         }
-        return processor.build(args);
+        return processor.build(fixedArgs);
     }
 
     /**
@@ -85,7 +93,9 @@ public class PropertyBuilder {
         UNIQUE_ITEMS("uniqueItems"),
         EXAMPLE("example"),
         TYPE("type"),
-        FORMAT("format");
+        FORMAT("format"),
+        READ_ONLY("readOnly"),
+        VENDOR_EXTENSIONS("vendorExtensions");
 
         private String propertyName;
 
@@ -130,37 +140,20 @@ public class PropertyBuilder {
                         }
                     }
                 }
+
                 return property;
             }
         },
-        STRING(StringProperty.class) {
+        BYTE_ARRAY(ByteArrayProperty.class) {
             @Override
             protected boolean isType(String type, String format) {
-                return StringProperty.isType(type, format);
+                return ByteArrayProperty.isType(type, format);
             }
 
             @Override
-            protected StringProperty create() {
-                return new StringProperty();
+            protected ByteArrayProperty create() {
+                return new ByteArrayProperty();
             }
-
-            @Override
-            public Property merge(Property property, Map<PropertyId, Object> args) {
-                super.merge(property, args);
-                if (property instanceof StringProperty) {
-                    mergeString((StringProperty) property, args);
-                }
-                return property;
-            }
-
-            @Override
-            public Model toModel(Property property) {
-                if (isType(property)) {
-                    return createStringModel((StringProperty) property);
-                }
-                return null;
-            }
-
         },
         DATE(DateProperty.class) {
             @Override
@@ -184,17 +177,10 @@ public class PropertyBuilder {
                 return new DateTimeProperty();
             }
         },
-        INTEGER(IntegerProperty.class) {
+        INT(IntegerProperty.class) {
             @Override
             protected boolean isType(String type, String format) {
-                if (IntegerProperty.isType(type, format)) {
-                    return true;
-                }
-                if (IntegerProperty.TYPE.equals(type) && format == null) {
-                    LOGGER.debug("no format specified for integer type, falling back to int32");
-                    return true;
-                }
-                return false;
+                return IntegerProperty.isType(type, format);
             }
 
             @Override
@@ -363,6 +349,35 @@ public class PropertyBuilder {
                 return null;
             }
         },
+
+        // note: this must be in the enum order after both INT and LONG
+        // (and any integer types added in the future), so the more specific
+        // ones will be found first.
+        INTEGER(BaseIntegerProperty.class) {
+            @Override
+            protected boolean isType(String type, String format) {
+                return BaseIntegerProperty.isType(type, format);
+            }
+
+            @Override
+            protected BaseIntegerProperty create() {
+                return new BaseIntegerProperty();
+            }
+
+            @Override
+            public Property merge(Property property, Map<PropertyId, Object> args) {
+                super.merge(property, args);
+                if (property instanceof BaseIntegerProperty) {
+                    final BaseIntegerProperty resolved = (BaseIntegerProperty) property;
+                    mergeNumeric(resolved, args);
+                }
+                return property;
+            }
+        },
+
+        // note: this must be in the enum order after both DOUBLE and FLOAT
+        // (and any number types added in the future), so the more specific
+        // ones will be found first.
         DECIMAL(DecimalProperty.class) {
             @Override
             protected boolean isType(String type, String format) {
@@ -495,14 +510,7 @@ public class PropertyBuilder {
         OBJECT(ObjectProperty.class) {
             @Override
             protected boolean isType(String type, String format) {
-                if (ObjectProperty.isType(type, format)) {
-                    return true;
-                }
-                if (ObjectProperty.TYPE.equals(type) && format == null) {
-                    LOGGER.debug("no format specified for object type, falling back to object");
-                    return true;
-                }
-                return false;
+                return ObjectProperty.isType(type, format);
             }
 
             @Override
@@ -530,6 +538,24 @@ public class PropertyBuilder {
                 }
                 return null;
             }
+
+            @Override
+            public Property merge(final Property property, final Map<PropertyId, Object> args) {
+                super.merge(property, args);
+                if (property instanceof ArrayProperty) {
+                    final ArrayProperty resolved = (ArrayProperty) property;
+                    if (args.containsKey(PropertyId.MIN_ITEMS)) {
+                        final Integer value = PropertyId.MIN_ITEMS.findValue(args);
+                        resolved.setMinItems(value);
+                    }
+                    if (args.containsKey(PropertyId.MAX_ITEMS)) {
+                        final Integer value = PropertyId.MAX_ITEMS.findValue(args);
+                        resolved.setMaxItems(value);
+                    }
+                }
+
+                return property;
+            }
         },
         MAP(MapProperty.class) {
             @Override
@@ -552,7 +578,42 @@ public class PropertyBuilder {
                 }
                 return null;
             }
-        };
+        },
+
+        // String is intentionally last, so it is found after the more specific property
+        // types which also use the "string" type.
+        STRING(StringProperty.class) {
+            @Override
+            protected boolean isType(final String type, final String format) {
+                return StringProperty.isType(type, format);
+            }
+
+            @Override
+            protected StringProperty create() {
+                return new StringProperty();
+            }
+
+            @Override
+            public Property merge(final Property property, final Map<PropertyId, Object> args) {
+                super.merge(property, args);
+                if (property instanceof StringProperty) {
+                    mergeString((StringProperty) property, args);
+                }
+
+                return property;
+            }
+
+            @Override
+            public Model toModel(final Property property) {
+                if (isType(property)) {
+                    return createStringModel((StringProperty) property);
+                }
+
+                return null;
+            }
+
+        },
+        ;
 
         private final Class<? extends Property> type;
 
@@ -566,7 +627,7 @@ public class PropertyBuilder {
                     return item;
                 }
             }
-            LOGGER.error("no property for " + type + ", " + format);
+            LOGGER.debug("no property for " + type + ", " + format);
             return null;
         }
 
@@ -662,8 +723,14 @@ public class PropertyBuilder {
          * @return updated property instance
          */
         public Property merge(Property property, Map<PropertyId, Object> args) {
+            if(args.containsKey(PropertyId.READ_ONLY)) {
+                property.setReadOnly(PropertyId.READ_ONLY.<Boolean>findValue(args));
+            }
             if (property instanceof AbstractProperty) {
                 final AbstractProperty resolved = (AbstractProperty) property;
+                if (resolved.getFormat() == null) {
+                    resolved.setFormat(PropertyId.FORMAT.<String>findValue(args));
+                }
                 if (args.containsKey(PropertyId.TITLE)) {
                     final String value = PropertyId.TITLE.findValue(args);
                     resolved.setTitle(value);
@@ -675,6 +742,92 @@ public class PropertyBuilder {
                 if (args.containsKey(PropertyId.EXAMPLE)) {
                     final String value = PropertyId.EXAMPLE.findValue(args);
                     resolved.setExample(value);
+                }
+                if(args.containsKey(PropertyId.VENDOR_EXTENSIONS)) {
+                    final Map<String, Object> value = PropertyId.VENDOR_EXTENSIONS.findValue(args);
+                    resolved.setVendorExtensionMap(value);
+                }
+                if(args.containsKey(PropertyId.ENUM)) {
+                    final List<String> values = PropertyId.ENUM.findValue(args);
+                    if(values != null) {
+                        if(property instanceof IntegerProperty) {
+                            IntegerProperty p = (IntegerProperty) property;
+                            for(String value : values) {
+                              try {
+                                p._enum(Integer.parseInt(value));
+                              }
+                              catch(Exception e) {
+                                // continue
+                              }
+                            }                            
+                        }
+                        if(property instanceof LongProperty) {
+                          LongProperty p = (LongProperty) property;
+                          for(String value : values) {
+                            try {
+                              p._enum(Long.parseLong(value));
+                            }
+                            catch(Exception e) {
+                              // continue
+                            }
+                          }                            
+                        }
+                        if(property instanceof DoubleProperty) {
+                            DoubleProperty p = (DoubleProperty) property;
+                            for(String value : values) {
+                              try {
+                                p._enum(Double.parseDouble(value));
+                              }
+                              catch(Exception e) {
+                                // continue
+                              }
+                            }                            
+                        }
+                        if(property instanceof FloatProperty) {
+                          FloatProperty p = (FloatProperty) property;
+                          for(String value : values) {
+                            try {
+                              p._enum(Float.parseFloat(value));
+                            }
+                            catch(Exception e) {
+                              // continue
+                            }
+                          }                            
+                       }
+                       if(property instanceof DateProperty) {
+                          DateProperty p = (DateProperty) property;
+                          for(String value : values) {
+                            try {
+                              p._enum(value);
+                            }
+                            catch(Exception e) {
+                              // continue
+                            }
+                          }                            
+                       }
+                       if(property instanceof DateTimeProperty) {
+                         DateTimeProperty p = (DateTimeProperty) property;
+                         for(String value : values) {
+                           try {
+                             p._enum(value);
+                           }
+                           catch(Exception e) {
+                             // continue
+                           }
+                         }                            
+                       }
+                       if(property instanceof UUIDProperty) {
+                         UUIDProperty p = (UUIDProperty) property;
+                         for(String value : values) {
+                           try {
+                             p._enum(value);
+                           }
+                           catch(Exception e) {
+                             // continue
+                           }
+                         }                            
+                       }
+                    }
                 }
             }
             return property;

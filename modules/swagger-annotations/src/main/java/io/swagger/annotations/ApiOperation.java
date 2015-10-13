@@ -1,12 +1,12 @@
 /**
  * Copyright 2015 SmartBear Software
- * <p/>
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p/>
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -146,15 +146,13 @@ public @interface ApiOperation {
      */
     String protocols() default "";
 
-
     /**
      * Corresponds to the `security` field of the Operation Object.
      * <p>
      * Takes in a list of the authorizations (security requirements) for this operation.
      *
-     * @see Authorization
-     *
      * @return an array of authorizations required by the server, or a single, empty authorization value if not set.
+     * @see Authorization
      */
     Authorization[] authorizations() default @Authorization(value = "");
 

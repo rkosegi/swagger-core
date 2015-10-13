@@ -2,20 +2,35 @@ package io.swagger.models.properties;
 
 import io.swagger.models.Xml;
 
-public class LongProperty extends AbstractNumericProperty implements Property {
+import java.util.ArrayList;
+import java.util.List;
+
+public class LongProperty extends BaseIntegerProperty {
+    private static final String FORMAT = "int64";
     protected Long _default;
+    protected List<Long> _enum;
 
     public LongProperty() {
-        super.type = "integer";
-        super.format = "int64";
+        super(FORMAT);
+    }
+
+    public LongProperty _enum(Long value) {
+        if (this._enum == null) {
+            this._enum = new ArrayList<Long>();
+        }
+        if (!_enum.contains(value)) {
+            _enum.add(value);
+        }
+        return this;
+    }
+
+    public LongProperty _enum(List<Long> value) {
+        this._enum = value;
+        return this;
     }
 
     public static boolean isType(String type, String format) {
-        if ("integer".equals(type) && "int64".equals(format)) {
-            return true;
-        } else {
-            return false;
-        }
+        return TYPE.equals(type) && FORMAT.equals(format);
     }
 
     public LongProperty xml(Xml xml) {
@@ -56,23 +71,28 @@ public class LongProperty extends AbstractNumericProperty implements Property {
         this._default = _default;
     }
 
+    public List<Long> getEnum() {
+        return _enum;
+    }
+
+    public void setEnum(List<Long> _enum) {
+        this._enum = _enum;
+    }
+
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = 1;
+        int result = super.hashCode();
         result = prime * result + ((_default == null) ? 0 : _default.hashCode());
         return result;
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
+        if (!super.equals(obj)) {
             return false;
         }
-        if (getClass() != obj.getClass()) {
+        if (!(obj instanceof LongProperty)) {
             return false;
         }
         LongProperty other = (LongProperty) obj;
